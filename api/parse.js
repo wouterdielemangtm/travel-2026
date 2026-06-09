@@ -12,6 +12,7 @@ export default async function handler(req, res) {
     const KEY = process.env.ANTHROPIC_API_KEY;
     if (!KEY) return res.status(200).json({ trips: [], debug: 'no API key in env' });
 
+    // Read body robustly (works whether or not bodyParser ran)
     let body = req.body;
     if (!body || typeof body === 'string') {
       try { body = JSON.parse(body || '{}'); } catch { body = {}; }
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
       ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
       : { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/png', data: base64 } };
 
-    const system = 'You parse travel booking documents. Return ONLY a JSON array, no markdown fences, no prose. Each object has exactly these keys: date (YYYY-MM-DD), time (HH:MM or null), route (Origin then arrow then Destination), notes (flight/train number, class, seat, ref, or null), transport (one of Train, Flight, Uber, Ferry, Walk), status (always "booked"). If multiple legs exist, one object per leg. Return [] if nothing found.';
+    const system = 'You parse travel booking documents. Return ONLY a JSON array, no markdown fences, no prose. Each object has exactly these keys: date (YYYY-MM-DD), time (HH:MM or null), route (Origin then arrow then Destination), notes (string), transport (one of Train, Flight, Uber, Ferry, Walk), status (always "booked"). For notes, list each distinct booking detail separated by " · " (space-middot-space): flight or train number, travel class, booking class, seat, coach/wagon, booking reference, ticket number, baggage. Example notes: "KL1274 · Economy Class · Booking class S · Ref X9CK4P · Ticket 0742139202928". If multiple legs exist, one object per leg. Return [] if nothing found.';
 
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -33,7 +34,7 @@ export default async function handler(req, res) {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-4-20250514',
         max_tokens: 1024,
         system,
         messages: [{ role: 'user', content: [block, { type: 'text', text: 'Extract all bookings as JSON.' }] }],
