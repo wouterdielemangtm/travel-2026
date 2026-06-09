@@ -52,6 +52,18 @@
     .preview h4 { font-size:12px; font-weight:600; color:var(--booked-c); margin-bottom:.75rem; }
     .preview-item { display:flex; align-items:center; gap:.6rem; font-size:13px; padding:.25rem 0; }
     .preview-item input { accent-color:var(--booked-c); }
+    .pv-trip { border:1px solid var(--booked-bd); background:#fff; border-radius:8px; padding:.75rem .9rem; margin-bottom:.6rem; }
+    .pv-head { display:flex; align-items:center; gap:.5rem; font-size:13px; margin-bottom:.5rem; }
+    .pv-head input { accent-color:var(--booked-c); }
+    .pv-route { font-weight:600; }
+    .pv-meta { color:var(--text-3); font-size:12px; }
+    .pv-chips { display:flex; flex-wrap:wrap; gap:.4rem; }
+    .pv-chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; background:var(--bg);
+      border:1px solid var(--border); border-radius:20px; padding:2px 6px 2px 9px; color:var(--text-2); }
+    .pv-chip button { background:none; border:none; cursor:pointer; color:var(--text-4); font-size:13px;
+      line-height:1; padding:0 1px; border-radius:50%; }
+    .pv-chip button:hover { color:var(--book-c); }
+    .pv-chip.removed { opacity:.35; text-decoration:line-through; }
     .preview-actions { display:flex; gap:.5rem; margin-top:.75rem; }
     .btn-green { height:30px; padding:0 .875rem; background:var(--booked-c); color:#fff; border:none;
       border-radius:5px; font-size:12px; font-weight:500; cursor:pointer; font-family:inherit; }
@@ -87,7 +99,7 @@
       color:var(--text-3); padding-bottom:.5rem; border-bottom:1px solid var(--border); margin-bottom:.25rem;
       display:flex; justify-content:space-between; align-items:center; }
     .month-count { font-size:11px; font-weight:500; background:#f3f4f6; color:var(--text-3); padding:1px 7px; border-radius:20px; }
-    .trip-row { display:grid; grid-template-columns:60px 110px 1fr auto; align-items:center; gap:0 12px;
+    .trip-row { display:grid; grid-template-columns:50px 80px 56px 1fr auto; align-items:center; gap:0 12px;
       padding:10px 10px 10px 14px; border-radius:5px; border-left:3px solid transparent; transition:background .1s; }
     .trip-row:hover { background:#f9fafb; }
     .trip-row.s-planned { border-left-color:var(--planned-c); }
@@ -95,6 +107,7 @@
     .trip-row.s-booked { border-left-color:var(--booked-c); }
     .t-day { font-size:13px; font-weight:500; color:var(--text-3); }
     .t-date { font-size:13px; color:var(--text-3); }
+    .t-time { font-size:12px; color:var(--text-3); font-variant-numeric:tabular-nums; text-align:right; }
     .t-activity { font-size:14px; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
     .tbadge { font-size:11px; font-weight:500; padding:2px 8px; border-radius:20px; background:#f3f4f6;
       color:var(--text-3); border:1px solid var(--border); }
@@ -118,7 +131,8 @@
 
     @media (max-width:680px) {
       .form-row { grid-template-columns:1fr 1fr; } .add-btn { grid-column:span 2; width:100%; }
-      .topbar-stats { display:none; } .trip-row { grid-template-columns:60px 1fr auto; }
+      .topbar-stats { display:none; } .trip-row { grid-template-columns:46px 50px 1fr auto; }
+      .t-date { display:none; }
     }
   </style>
 </head>
@@ -189,24 +203,34 @@ const MONTHS=['January','February','March','April','May','June','July','August',
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const ICONS={Train:'🚂',Flight:'✈️',Uber:'🚗',Walk:'🚶',Ferry:'⛴️'};
 
-// Provider brand detection — matches keywords in notes+route, returns {name, bg, fg}
+// Provider brand detection. Names match in route+notes; short codes only in notes, word-bounded.
 const PROVIDERS=[
-  {name:'Deutsche Bahn', bg:'#EC0016', fg:'#fff', kw:['deutsche bahn','db ','ice ','ic ','ec ','ec4','ec49','sparpreis','db navigator','railjet']},
-  {name:'NS',            bg:'#FFC917', fg:'#1a1a1a', kw:['ns ','ns international','intercity direct','nederlandse spoorwegen']},
-  {name:'SJ',            bg:'#1B4D3E', fg:'#fff', kw:['sj ','sj-','statens järnvägar','snabbtåg']},
-  {name:'Öresundståg',   bg:'#009CDE', fg:'#fff', kw:['öresund','oresund','øresund']},
-  {name:'PKP',           bg:'#1D1D52', fg:'#fff', kw:['pkp','intercity pl','tlk','pendolino','eip','warszawa']},
-  {name:'SAS',           bg:'#003087', fg:'#fff', kw:['sas','scandinavian','sk ','sk5','sk548']},
-  {name:'KLM',           bg:'#00A1DE', fg:'#fff', kw:['klm','royal dutch']},
-  {name:'Lufthansa',     bg:'#05164D', fg:'#F9BA00', kw:['lufthansa','lh ']},
-  {name:'Austrian',      bg:'#CC0000', fg:'#fff', kw:['austrian','os ','aua']},
-  {name:'Transavia',     bg:'#00D1B0', fg:'#fff', kw:['transavia','hv ']},
+  {name:'Deutsche Bahn', bg:'#EC0016', fg:'#fff', names:['deutsche bahn','db navigator','sparpreis','railjet'], codes:['db','ice','ic','ec','rb','re']},
+  {name:'NS',            bg:'#FFC917', fg:'#1a1a1a', names:['ns international','intercity direct','nederlandse spoorwegen'], codes:['ns']},
+  {name:'SJ',            bg:'#1B4D3E', fg:'#fff', names:['statens järnvägar','snabbtåg'], codes:['sj']},
+  {name:'Öresundståg',   bg:'#009CDE', fg:'#fff', names:['öresundståg','öresund','oresund','øresund'], codes:[]},
+  {name:'PKP',           bg:'#1D1D52', fg:'#fff', names:['pkp','intercity','pendolino','tlk'], codes:['eip','eic']},
+  {name:'SAS',           bg:'#003087', fg:'#fff', names:['scandinavian airlines','sas'], codes:['sk']},
+  {name:'KLM',           bg:'#00A1DE', fg:'#fff', names:['klm','royal dutch'], codes:['kl']},
+  {name:'Lufthansa',     bg:'#05164D', fg:'#F9BA00', names:['lufthansa'], codes:['lh']},
+  {name:'Austrian',      bg:'#CC0000', fg:'#fff', names:['austrian'], codes:['os','aua']},
+  {name:'Transavia',     bg:'#00D1B0', fg:'#fff', names:['transavia'], codes:['hv']},
+  {name:'KLM',           bg:'#00A1DE', fg:'#fff', names:[], codes:['klm']},
 ];
 
 function detectProvider(t){
-  const hay=((t.notes||'')+' '+(t.route||'')).toLowerCase();
+  const notes=(t.notes||'').toLowerCase();
+  const all=(notes+' '+(t.route||'')).toLowerCase();
+  // 1) Full names can match anywhere (route or notes)
   for(const p of PROVIDERS){
-    if(p.kw.some(k=>hay.includes(k))) return p;
+    if(p.names.some(n=>n && all.includes(n))) return p;
+  }
+  // 2) Short airline/train codes must be word-bounded AND only in notes (avoid city names like Gdańsk)
+  for(const p of PROVIDERS){
+    for(const c of p.codes){
+      const re=new RegExp('\\b'+c+'\\s*\\d', 'i'); // e.g. "SK548", "ICE 149", "EC49", "KL1234"
+      if(re.test(notes)) return p;
+    }
   }
   return null;
 }
@@ -288,22 +312,59 @@ async function handleFile(file){
 }
 
 function showPreview(list){
-  document.getElementById('previewItems').innerHTML = list.map((t,i)=>`
-    <div class="preview-item">
-      <input type="checkbox" id="pi${i}" checked/>
-      <label for="pi${i}" style="cursor:pointer">
-        <strong>${t.date||'?'}</strong>${t.time?' '+t.time:''} &nbsp; ${t.route||''}
-        <span style="color:var(--text-3)">&nbsp;${t.notes||''} · ${t.transport||'Train'}</span>
-      </label>
-    </div>`).join('');
+  // Build editable model: each trip gets its notes split into removable detail chips
+  parsed = list.map(t => {
+    const raw = (t.notes||'').split(/[·,;|]+/).map(s=>s.trim()).filter(Boolean);
+    return { ...t, include:true, details: raw.map(d=>({text:d, keep:true})) };
+  });
+
+  document.getElementById('previewItems').innerHTML = parsed.map((t,i)=>{
+    const chips = t.details.map((d,j)=>`
+      <span class="pv-chip" id="chip-${i}-${j}">
+        ${d.text}
+        <button onclick="toggleDetail(${i},${j})" title="Remove">×</button>
+      </span>`).join('');
+    return `
+    <div class="pv-trip">
+      <div class="pv-head">
+        <input type="checkbox" id="pi${i}" checked onchange="parsed[${i}].include=this.checked"/>
+        <span class="pv-route">${t.route||'?'}</span>
+        <span class="pv-meta">${t.date||'?'}${t.time?' · '+t.time:''} · ${t.transport||'Train'}</span>
+      </div>
+      <div class="pv-chips">${chips || '<span class="pv-meta">no extra details</span>'}</div>
+    </div>`;
+  }).join('');
   document.getElementById('preview').style.display='block';
 }
 
+function toggleDetail(i,j){
+  const d = parsed[i].details[j];
+  d.keep = !d.keep;
+  document.getElementById(`chip-${i}-${j}`).classList.toggle('removed', !d.keep);
+}
+
 async function importSelected(){
-  const chosen = parsed.filter((_,i)=>document.getElementById('pi'+i)?.checked);
-  if(chosen.length) await db('insert',{ payload: chosen });
+  const chosen = parsed.filter(t=>t.include).map(t=>({
+    date:t.date, time:t.time||null, route:t.route,
+    notes: t.details.filter(d=>d.keep).map(d=>d.text).join(' · ') || null,
+    transport:t.transport||'Train', status:t.status||'booked'
+  }));
+  if(!chosen.length){ dismissPreview(); return; }
+
+  // Check for existing trips with same date+route
+  let added=0, updated=0;
+  for(const c of chosen){
+    const existing = trips.find(t => t.date===c.date && (t.route||'').toLowerCase()===(c.route||'').toLowerCase());
+    if(existing){
+      const ow = confirm(`A trip already exists:\n${existing.route} on ${existing.date}\n\nOK = overwrite it\nCancel = add as a new separate trip`);
+      if(ow){ await db('update',{ id:existing.id, payload:c }); updated++; }
+      else  { await db('insert',{ payload:c }); added++; }
+    } else {
+      await db('insert',{ payload:c }); added++;
+    }
+  }
   dismissPreview();
-  showToast(`${chosen.length} trip${chosen.length>1?'s':''} imported ✓`);
+  showToast(`${added} added${updated?`, ${updated} overwritten`:''} ✓`);
   load();
 }
 
@@ -335,9 +396,10 @@ function render(){
         : `<span class="tbadge">${icon} ${t.transport||'Train'}</span>`;
       html+=`<div class="trip-row s-${t.status}">
         <span class="t-day">${day}</span><span class="t-date">${dateStr}</span>
+        <span class="t-time">${time||'—'}</span>
         <span class="t-activity">${t.route||''}
           ${badge}
-          ${time?`<span class="tpill">${time}</span>`:''}${t.notes?`<span class="tpill">${t.notes}</span>`:''}</span>
+          ${t.notes?`<span class="tpill">${t.notes}</span>`:''}</span>
         <span class="t-actions">
           <button class="sbadge sb-${t.status}" onclick="cycleStatus(${t.id},'${t.status}')">${lbl}</button>
           <button class="del-btn" onclick="deleteTrip(${t.id})" title="Delete">×</button>
