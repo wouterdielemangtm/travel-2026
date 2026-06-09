@@ -188,6 +188,29 @@
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const ICONS={Train:'🚂',Flight:'✈️',Uber:'🚗',Walk:'🚶',Ferry:'⛴️'};
+
+// Provider brand detection — matches keywords in notes+route, returns {name, bg, fg}
+const PROVIDERS=[
+  {name:'Deutsche Bahn', bg:'#EC0016', fg:'#fff', kw:['deutsche bahn','db ','ice ','ic ','ec ','ec4','ec49','sparpreis','db navigator','railjet']},
+  {name:'NS',            bg:'#FFC917', fg:'#1a1a1a', kw:['ns ','ns international','intercity direct','nederlandse spoorwegen']},
+  {name:'SJ',            bg:'#1B4D3E', fg:'#fff', kw:['sj ','sj-','statens järnvägar','snabbtåg']},
+  {name:'Öresundståg',   bg:'#009CDE', fg:'#fff', kw:['öresund','oresund','øresund']},
+  {name:'PKP',           bg:'#1D1D52', fg:'#fff', kw:['pkp','intercity pl','tlk','pendolino','eip','warszawa']},
+  {name:'SAS',           bg:'#003087', fg:'#fff', kw:['sas','scandinavian','sk ','sk5','sk548']},
+  {name:'KLM',           bg:'#00A1DE', fg:'#fff', kw:['klm','royal dutch']},
+  {name:'Lufthansa',     bg:'#05164D', fg:'#F9BA00', kw:['lufthansa','lh ']},
+  {name:'Austrian',      bg:'#CC0000', fg:'#fff', kw:['austrian','os ','aua']},
+  {name:'Transavia',     bg:'#00D1B0', fg:'#fff', kw:['transavia','hv ']},
+];
+
+function detectProvider(t){
+  const hay=((t.notes||'')+' '+(t.route||'')).toLowerCase();
+  for(const p of PROVIDERS){
+    if(p.kw.some(k=>hay.includes(k))) return p;
+  }
+  return null;
+}
+
 let trips=[], parsed=[];
 
 // ---- API helpers (all go through Vercel functions) ----
@@ -306,10 +329,14 @@ function render(){
       const day=DAYS[d.getDay()], dateStr=MONTHS[d.getMonth()].slice(0,3)+' '+d.getDate();
       const icon=ICONS[t.transport]||'🚌', time=t.time?t.time.slice(0,5):'';
       const lbl=t.status==='booked'?'✓ booked':t.status==='book'?'need to book':'planned';
+      const prov=detectProvider(t);
+      const badge = prov
+        ? `<span class="tbadge" style="background:${prov.bg};color:${prov.fg};border-color:${prov.bg}">${icon} ${prov.name}</span>`
+        : `<span class="tbadge">${icon} ${t.transport||'Train'}</span>`;
       html+=`<div class="trip-row s-${t.status}">
         <span class="t-day">${day}</span><span class="t-date">${dateStr}</span>
         <span class="t-activity">${t.route||''}
-          <span class="tbadge">${icon} ${t.transport||'Train'}</span>
+          ${badge}
           ${time?`<span class="tpill">${time}</span>`:''}${t.notes?`<span class="tpill">${t.notes}</span>`:''}</span>
         <span class="t-actions">
           <button class="sbadge sb-${t.status}" onclick="cycleStatus(${t.id},'${t.status}')">${lbl}</button>
