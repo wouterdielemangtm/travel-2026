@@ -5,421 +5,56 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Travel 2026 — Wouter</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg:         #f9fafb;
-      --surface:    #ffffff;
-      --border:     #e5e7eb;
-      --text:       #111827;
-      --text-2:     #374151;
-      --text-3:     #6b7280;
-      --text-4:     #9ca3af;
-
-      --planned-c:  #d97706;
-      --planned-bg: #fffbeb;
-      --planned-bd: #fde68a;
-
-      --book-c:     #dc2626;
-      --book-bg:    #fef2f2;
-      --book-bd:    #fecaca;
-
-      --booked-c:   #16a34a;
-      --booked-bg:  #f0fdf4;
-      --booked-bd:  #bbf7d0;
-
-      --blue:       #2563eb;
-      --blue-bg:    #eff6ff;
+      --bg:#f9fafb; --surface:#fff; --border:#e5e7eb; --text:#111827; --text-2:#374151;
+      --text-3:#6b7280; --text-4:#9ca3af;
+      --planned-c:#d97706; --planned-bg:#fffbeb; --planned-bd:#fde68a;
+      --book-c:#dc2626; --book-bg:#fef2f2; --book-bd:#fecaca;
+      --booked-c:#16a34a; --booked-bg:#f0fdf4; --booked-bd:#bbf7d0;
+      --blue:#2563eb; --blue-bg:#eff6ff;
     }
+    body { font-family:'Inter',system-ui,sans-serif; background:var(--bg); color:var(--text); font-size:14px; line-height:1.5; }
 
-    body {
-      font-family: 'Inter', system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      font-size: 14px;
-      line-height: 1.5;
-    }
+    .topbar { background:var(--surface); border-bottom:1px solid var(--border); height:52px; padding:0 2rem;
+      display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:10; }
+    .brand { display:flex; align-items:center; gap:10px; }
+    .brand-logo { width:26px; height:26px; background:var(--text); border-radius:6px; display:flex;
+      align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:600; }
+    .brand-name { font-weight:600; }
+    .brand-sub { font-size:12px; color:var(--text-3); margin-left:2px; }
+    .topbar-stats { display:flex; gap:2rem; }
+    .stat-item { text-align:right; }
+    .stat-val { font-size:15px; font-weight:600; }
+    .stat-lbl { font-size:11px; color:var(--text-3); text-transform:uppercase; letter-spacing:.05em; }
 
-    /* TOPBAR */
-    .topbar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      height: 52px;
-      padding: 0 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky; top: 0; z-index: 10;
-    }
-    .brand { display: flex; align-items: center; gap: 10px; }
-    .brand-logo {
-      width: 26px; height: 26px; background: var(--text);
-      border-radius: 6px; display: flex; align-items: center;
-      justify-content: center; color: white; font-size: 12px; font-weight: 600;
-    }
-    .brand-name { font-weight: 600; font-size: 14px; }
-    .brand-sub  { font-size: 12px; color: var(--text-3); margin-left: 2px; }
-    .topbar-stats { display: flex; gap: 2rem; }
-    .stat-item { text-align: right; }
-    .stat-val { font-size: 15px; font-weight: 600; }
-    .stat-lbl { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; }
+    .page { max-width:900px; margin:0 auto; padding:2rem 1.5rem; }
 
-    /* PAGE */
-    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+    .import-zone { border:1.5px dashed var(--border); border-radius:12px; background:var(--surface);
+      padding:1.25rem 1.5rem; display:flex; align-items:center; gap:1.25rem; margin-bottom:1.5rem;
+      cursor:pointer; position:relative; transition:border-color .15s, background .15s; }
+    .import-zone:hover, .import-zone.drag { border-color:var(--blue); background:var(--blue-bg); }
+    .import-zone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; }
+    .import-icon { width:40px; height:40px; flex-shrink:0; background:var(--bg); border:1px solid var(--border);
+      border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:18px; }
+    .import-text h3 { font-size:13px; font-weight:600; margin-bottom:2px; }
+    .import-text p { font-size:12px; color:var(--text-3); }
+    .import-status { margin-left:auto; font-size:12px; color:var(--text-3); flex-shrink:0; text-align:right; }
+    .import-status.loading { color:var(--blue); }
+    .import-status.success { color:var(--booked-c); }
+    .import-status.error { color:var(--book-c); }
 
-    /* LEGEND */
-    .legend {
-      display: flex; gap: 1rem; align-items: center;
-      margin-bottom: 1.5rem; flex-wrap: wrap;
-    }
-    .legend-item {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 12px; color: var(--text-3);
-    }
-    .legend-dot {
-      width: 10px; height: 10px; border-radius: 50%;
-    }
-    .dot-planned { background: var(--planned-c); }
-    .dot-book    { background: var(--book-c); }
-    .dot-booked  { background: var(--booked-c); }
+    .preview { background:var(--booked-bg); border:1px solid var(--booked-bd); border-radius:10px;
+      padding:1rem 1.25rem; margin-bottom:1.5rem; display:none; }
+    .preview h4 { font-size:12px; font-weight:600; color:var(--booked-c); margin-bottom:.75rem; }
+    .preview-item { display:flex; align-items:center; gap:.6rem; font-size:13px; padding:.25rem 0; }
+    .preview-item input { accent-color:var(--booked-c); }
+    .preview-actions { display:flex; gap:.5rem; margin-top:.75rem; }
+    .btn-green { height:30px; padding:0 .875rem; background:var(--booked-c); color:#fff; border:none;
+      border-radius:5px; font-size:12px; font-weight:500; cursor:pointer; font-family:inherit; }
+    .btn-ghost { height:30px; padding:0 .875rem; background:none; color:var(--text-3); border:1px solid var(--border);
+      border-radius:5px; font-size:12px; cursor:pointer; font-family:inherit; }
 
-    /* MONTH */
-    .month-block { margin-bottom: 1.75rem; }
-    .month-header {
-      font-size: 11px; font-weight: 600;
-      text-transform: uppercase; letter-spacing: .09em;
-      color: var(--text-3);
-      padding-bottom: .5rem;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: .25rem;
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .month-count {
-      font-size: 11px; font-weight: 500;
-      background: #f3f4f6; color: var(--text-3);
-      padding: 1px 7px; border-radius: 20px;
-    }
-
-    /* TRIP ROW — matches the widget style */
-    .trip-row {
-      display: grid;
-      grid-template-columns: 60px 110px 1fr auto;
-      align-items: center;
-      gap: 0 12px;
-      padding: 10px 10px 10px 14px;
-      border-radius: 5px;
-      border-left: 3px solid transparent;
-      transition: background .1s;
-    }
-    .trip-row:hover { background: #f9fafb; }
-    .trip-row.s-planned { border-left-color: var(--planned-c); }
-    .trip-row.s-book    { border-left-color: var(--book-c); }
-    .trip-row.s-booked  { border-left-color: var(--booked-c); }
-
-    .t-day  { font-size: 13px; font-weight: 500; color: var(--text-3); }
-    .t-date { font-size: 13px; color: var(--text-3); }
-
-    .t-activity {
-      font-size: 14px; color: var(--text);
-      display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
-    }
-
-    /* transport badge */
-    .tbadge {
-      display: inline-block; font-size: 11px; font-weight: 500;
-      padding: 2px 8px; border-radius: 20px;
-      background: #f3f4f6; color: var(--text-3);
-      border: 1px solid var(--border);
-    }
-
-    /* travel time pill */
-    .tpill {
-      font-size: 11px; background: #f3f4f6; color: var(--text-3);
-      border: 0.5px solid var(--border); border-radius: 20px;
-      padding: 2px 10px; white-space: nowrap;
-    }
-
-    /* status badge — clickable, cycles */
-    .sbadge {
-      font-size: 11px; font-weight: 600;
-      padding: 2px 10px; border-radius: 20px;
-      border: 1px solid transparent;
-      cursor: pointer; font-family: inherit;
-      letter-spacing: .03em; white-space: nowrap;
-      transition: opacity .15s;
-    }
-    .sbadge:hover { opacity: .75; }
-    .sb-planned { background: var(--planned-bg); color: var(--planned-c); border-color: var(--planned-bd); }
-    .sb-book    { background: var(--book-bg);    color: var(--book-c);    border-color: var(--book-bd);    }
-    .sb-booked  { background: var(--booked-bg);  color: var(--booked-c);  border-color: var(--booked-bd);  }
-
-    .t-actions { display: flex; align-items: center; gap: 6px; }
-
-    .del-btn {
-      background: none; border: none; cursor: pointer;
-      color: var(--text-4); font-size: 16px; line-height: 1;
-      padding: 2px 4px; border-radius: 4px;
-      transition: color .15s;
-    }
-    .del-btn:hover { color: var(--book-c); }
-
-    .empty-row {
-      padding: .75rem 14px; font-size: 12px;
-      color: var(--text-4); font-style: italic;
-    }
-
-    /* ADD FORM */
-    .add-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 1.25rem 1.5rem;
-      margin-bottom: 2rem;
-      box-shadow: 0 1px 3px rgba(0,0,0,.06);
-    }
-    .add-title {
-      font-size: 11px; font-weight: 600;
-      text-transform: uppercase; letter-spacing: .07em;
-      color: var(--text-3); margin-bottom: 1rem;
-    }
-    .form-row {
-      display: grid;
-      grid-template-columns: 130px 95px 1fr 160px 125px 130px auto;
-      gap: .6rem; align-items: end;
-    }
-    .field label {
-      display: block; font-size: 11px; font-weight: 500;
-      text-transform: uppercase; letter-spacing: .06em;
-      color: var(--text-3); margin-bottom: .35rem;
-    }
-    input, select {
-      width: 100%; height: 34px;
-      border: 1px solid var(--border); border-radius: 5px;
-      background: var(--surface); color: var(--text);
-      font-family: inherit; font-size: 13px;
-      padding: 0 .6rem; outline: none;
-      transition: border-color .15s, box-shadow .15s;
-      -webkit-appearance: none;
-    }
-    input:focus, select:focus {
-      border-color: var(--blue);
-      box-shadow: 0 0 0 3px rgba(37,99,235,.1);
-    }
-    input::placeholder { color: var(--text-4); }
-    .add-btn {
-      height: 34px; padding: 0 1rem;
-      background: var(--text); color: white;
-      border: none; border-radius: 5px;
-      font-family: inherit; font-size: 13px; font-weight: 500;
-      cursor: pointer; white-space: nowrap;
-      transition: background .15s;
-    }
-    .add-btn:hover { background: var(--text-2); }
-
-    /* TOAST */
-    #toast {
-      position: fixed; bottom: 1.5rem; right: 1.5rem;
-      background: var(--text); color: white;
-      padding: .6rem 1rem; border-radius: 8px;
-      font-size: 12px; font-weight: 500;
-      opacity: 0; transition: opacity .2s;
-      pointer-events: none; z-index: 999;
-    }
-    #toast.show { opacity: 1; }
-
-    @media (max-width: 680px) {
-      .form-row { grid-template-columns: 1fr 1fr; }
-      .add-btn  { grid-column: span 2; width: 100%; }
-      .topbar-stats { display: none; }
-      .trip-row { grid-template-columns: 60px 1fr auto; }
-    }
-  </style>
-</head>
-<body>
-
-<div class="topbar">
-  <div class="brand">
-    <div class="brand-logo">W</div>
-    <span class="brand-name">Travel 2026</span>
-    <span class="brand-sub">· Wouter Dieleman</span>
-  </div>
-  <div class="topbar-stats" id="topStats"></div>
-</div>
-
-<div class="page">
-
-  <!-- LEGEND -->
-  <div class="legend">
-    <div class="legend-item"><div class="legend-dot dot-planned"></div> Planned</div>
-    <div class="legend-item"><div class="legend-dot dot-book"></div> Need to book</div>
-    <div class="legend-item"><div class="legend-dot dot-booked"></div> Booked</div>
-    <span style="font-size:12px;color:var(--text-4);margin-left:.5rem">· Click status badge to cycle</span>
-  </div>
-
-  <!-- ADD FORM -->
-  <div class="add-card">
-    <div class="add-title">Add trip</div>
-    <div class="form-row">
-      <div class="field"><label>Date</label><input type="date" id="f-date"/></div>
-      <div class="field"><label>Time</label><input type="time" id="f-time"/></div>
-      <div class="field"><label>Route</label><input type="text" id="f-route" placeholder="Amsterdam → Berlin"/></div>
-      <div class="field"><label>Notes</label><input type="text" id="f-notes" placeholder="ICE 149, seat 21..."/></div>
-      <div class="field">
-        <label>Transport</label>
-        <select id="f-transport">
-          <option value="Train">🚂 Train</option>
-          <option value="Flight">✈️ Flight</option>
-          <option value="Uber">🚗 Uber</option>
-          <option value="Walk">🚶 Walk</option>
-          <option value="Ferry">⛴️ Ferry</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Status</label>
-        <select id="f-status">
-          <option value="planned">Planned</option>
-          <option value="book">Need to book</option>
-          <option value="booked">Booked ✓</option>
-        </select>
-      </div>
-      <button class="add-btn" onclick="addTrip()">Add</button>
-    </div>
-  </div>
-
-  <!-- ITINERARY -->
-  <div id="itinerary"></div>
-
-</div>
-
-<div id="toast"></div>
-
-<script>
-const SUPABASE_URL = 'https://dvhsqhcedwmzmvspjiqp.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR2aHNxaGNlZHdtem12c3BqaXFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwMjgzMTQsImV4cCI6MjA5NjYwNDMxNH0.o-Qu0DUxwzVYpDQ3jyGh3-n8g2h5sZodOcXiLEkikWM';
-
-const MONTHS = ['January','February','March','April','May','June',
-                'July','August','September','October','November','December'];
-const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const ICONS  = { Train:'🚂', Flight:'✈️', Uber:'🚗', Walk:'🚶', Ferry:'⛴️' };
-
-let sb, trips = [];
-
-async function init() {
-  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  await load();
-  sb.channel('travel_bookings')
-    .on('postgres_changes', { event:'*', schema:'public', table:'travel_bookings' }, load)
-    .subscribe();
-}
-
-async function load() {
-  const { data, error } = await sb.from('travel_bookings').select('*').order('date').order('time');
-  if (error) { showToast('Load error'); return; }
-  trips = data || [];
-  render();
-}
-
-async function addTrip() {
-  const date  = document.getElementById('f-date').value;
-  const route = document.getElementById('f-route').value.trim();
-  if (!date)  { showToast('Pick a date first'); return; }
-  if (!route) { showToast('Enter a route'); return; }
-  const { error } = await sb.from('travel_bookings').insert([{
-    date,
-    time:      document.getElementById('f-time').value || null,
-    route,
-    notes:     document.getElementById('f-notes').value.trim() || null,
-    transport: document.getElementById('f-transport').value,
-    status:    document.getElementById('f-status').value,
-  }]);
-  if (error) { showToast('Error: ' + error.message); return; }
-  ['f-date','f-time','f-route','f-notes'].forEach(id => document.getElementById(id).value = '');
-  showToast('Trip added ✓');
-}
-
-async function cycleStatus(id, current) {
-  const next = { planned:'book', book:'booked', booked:'planned' }[current];
-  await sb.from('travel_bookings').update({ status: next }).eq('id', id);
-}
-
-async function deleteTrip(id) {
-  if (!confirm('Remove this trip?')) return;
-  await sb.from('travel_bookings').delete().eq('id', id);
-}
-
-function render() {
-  // Group by month, June–December 2026
-  const grouped = {};
-  for (let m = 5; m <= 11; m++) grouped[m] = [];
-  trips.forEach(t => {
-    if (!t.date) return;
-    const d = new Date(t.date + 'T12:00:00');
-    if (d.getFullYear() === 2026 && d.getMonth() >= 5 && d.getMonth() <= 11)
-      grouped[d.getMonth()].push(t);
-  });
-
-  let html = '';
-  for (let m = 5; m <= 11; m++) {
-    const mt = grouped[m];
-    html += `<div class="month-block">
-      <div class="month-header">
-        ${MONTHS[m]} 2026
-        <span class="month-count">${mt.length}</span>
-      </div>`;
-
-    if (!mt.length) {
-      html += `<div class="empty-row">No trips this month</div>`;
-    } else {
-      mt.forEach(t => {
-        const d       = new Date(t.date + 'T12:00:00');
-        const dayStr  = DAYS[d.getDay()];
-        const dateStr = `${MONTHS[d.getMonth()].slice(0,3)} ${d.getDate()}`;
-        const icon    = ICONS[t.transport] || '🚌';
-        const timeStr = t.time ? t.time.slice(0,5) : '';
-        const statusLabel = t.status === 'booked' ? '✓ booked' : t.status === 'book' ? 'need to book' : 'planned';
-
-        html += `
-        <div class="trip-row s-${t.status}">
-          <span class="t-day">${dayStr}</span>
-          <span class="t-date">${dateStr}</span>
-          <span class="t-activity">
-            ${t.route}
-            <span class="tbadge">${icon} ${t.transport}</span>
-            ${timeStr ? `<span class="tpill">${timeStr}</span>` : ''}
-            ${t.notes ? `<span class="tpill">${t.notes}</span>` : ''}
-          </span>
-          <span class="t-actions">
-            <button class="sbadge sb-${t.status}" onclick="cycleStatus(${t.id}, '${t.status}')">${statusLabel}</button>
-            <button class="del-btn" onclick="deleteTrip(${t.id})" title="Delete">×</button>
-          </span>
-        </div>`;
-      });
-    }
-    html += `</div>`;
-  }
-
-  document.getElementById('itinerary').innerHTML = html;
-
-  // Stats
-  const booked  = trips.filter(t => t.status === 'booked').length;
-  const toBook  = trips.filter(t => t.status === 'book').length;
-  const planned = trips.filter(t => t.status === 'planned').length;
-  document.getElementById('topStats').innerHTML = `
-    <div class="stat-item"><div class="stat-val" style="color:var(--booked-c)">${booked}</div><div class="stat-lbl">Booked</div></div>
-    <div class="stat-item"><div class="stat-val" style="color:var(--book-c)">${toBook}</div><div class="stat-lbl">To book</div></div>
-    <div class="stat-item"><div class="stat-val" style="color:var(--planned-c)">${planned}</div><div class="stat-lbl">Planned</div></div>
-  `;
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-init();
-</script>
-</body>
-</html>
+    .add-card { background:var(--surface); border:1px solid var(--border); border-radius:10px;
+      padding:1.25rem 1.5rem; margin-bottom:2rem; box-shadow:0 1px 3px rgba(0,0,0,.06); }
