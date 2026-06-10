@@ -100,8 +100,10 @@
       display:flex; justify-content:space-between; align-items:center; }
     .month-count { font-size:11px; font-weight:500; background:#f3f4f6; color:var(--text-3); padding:1px 7px; border-radius:20px; }
     .trip-row { display:grid; grid-template-columns:50px 80px 96px 1fr auto; align-items:center; gap:0 12px;
-      padding:10px 10px 10px 14px; border-radius:5px; border-left:3px solid transparent; transition:background .1s; }
-    .trip-row.cont { border-radius:0; margin-top:-4px; padding-top:6px; }
+      padding:10px 10px 10px 14px; border-left:3px solid transparent; transition:background .1s; }
+    .trip-row.day-first { border-top-left-radius:5px; border-top-right-radius:5px; padding-top:11px; }
+    .trip-row.day-last  { border-bottom-left-radius:5px; border-bottom-right-radius:5px; padding-bottom:11px; }
+    .trip-row.day-single { border-radius:5px; }
     .trip-row:hover { background:#f9fafb; }
     .trip-row.s-planned { border-left-color:var(--planned-c); }
     .trip-row.s-book { border-left-color:var(--book-c); }
@@ -156,7 +158,7 @@
 
     @media (max-width:680px) {
       .form-row { grid-template-columns:1fr 1fr; } .add-btn { grid-column:span 2; width:100%; }
-      .topbar-stats { display:none; } .trip-row { grid-template-columns:46px 50px 1fr auto; }
+      .topbar-stats { display:none; } .trip-row { grid-template-columns:42px 64px 1fr auto; }
       .t-date { display:none; }
     }
   </style>
@@ -452,7 +454,7 @@ function render(){
     mt.forEach(t=>{ dayCounts[t.date]=(dayCounts[t.date]||0)+1; });
 
     let lastDate=null;
-    mt.forEach(t=>{
+    mt.forEach((t,idx)=>{
       const rawStatus = ['planned','book','booked'].includes(t.status) ? t.status : 'planned';
       const d=new Date(t.date+'T12:00:00');
       const isPast = d < today;
@@ -461,6 +463,15 @@ function render(){
       const day=DAYS[d.getDay()], dateStr=MONTHS[d.getMonth()].slice(0,3)+' '+d.getDate();
       const showDate = t.date!==lastDate;  // only show date once per day
       lastDate=t.date;
+
+      // position within the day for border grouping
+      const sameDay = mt.filter(x=>x.date===t.date);
+      const posInDay = sameDay.indexOf(t);
+      let dayClass;
+      if(sameDay.length===1) dayClass='day-single';
+      else if(posInDay===0) dayClass='day-first';
+      else if(posInDay===sameDay.length-1) dayClass='day-last';
+      else dayClass='day-mid';
 
       // transfer indicator on the first row of a multi-leg day
       let transferTag='';
@@ -502,7 +513,7 @@ function render(){
         ? `<span class="tbadge" style="background:${prov.bg};color:${prov.fg};border-color:${prov.bg}">${icon} ${prov.name}</span>${durBit}`
         : `<span class="tbadge">${icon} ${t.transport||'Train'}</span>${durBit}`;
 
-      html+=`<div class="trip-row s-${st}${showDate?'':' cont'}">
+      html+=`<div class="trip-row s-${st} ${dayClass}">
         <span class="t-day">${showDate?day:''}</span><span class="t-date">${showDate?dateStr:''}${transferTag}</span>
         <span class="t-time" style="display:flex;gap:3px;align-items:center;justify-content:flex-end">${timeDisplay}</span>
         <span class="t-activity">
