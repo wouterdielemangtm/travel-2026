@@ -59,11 +59,25 @@
     .pv-meta { color:var(--text-3); font-size:12px; }
     .pv-chips { display:flex; flex-wrap:wrap; gap:.4rem; }
     .pv-chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; background:var(--bg);
-      border:1px solid var(--border); border-radius:20px; padding:2px 6px 2px 9px; color:var(--text-2); }
+      border:1px solid var(--border); border-radius:20px; padding:2px 6px 2px 9px; color:var(--text-2); cursor:grab; }
+    .pv-chip:active { cursor:grabbing; }
+    .pv-chip.dragover { outline:2px solid var(--blue); outline-offset:1px; }
     .pv-chip button { background:none; border:none; cursor:pointer; color:var(--text-4); font-size:13px;
       line-height:1; padding:0 1px; border-radius:50%; }
     .pv-chip button:hover { color:var(--book-c); }
     .pv-chip.removed { opacity:.35; text-decoration:line-through; }
+    .grip { color:var(--text-4); font-size:10px; cursor:grab; letter-spacing:-1px; }
+    /* live note chips (expanded) */
+    .note-chips { display:inline-flex; flex-wrap:wrap; gap:5px; align-items:center; }
+    .note-chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; background:#f3f4f6;
+      border:.5px solid var(--border); border-radius:20px; padding:2px 6px 2px 9px; color:var(--text-2);
+      cursor:grab; user-select:none; }
+    .note-chip:active { cursor:grabbing; }
+    .note-chip.dragover { outline:2px solid var(--blue); outline-offset:1px; }
+    .note-chip button { background:none; border:none; cursor:pointer; color:var(--text-4); font-size:12px; line-height:1; padding:0; }
+    .note-chip button:hover { color:var(--book-c); }
+    .note-done { font-size:10px; background:var(--text); color:#fff; border:none; border-radius:20px;
+      padding:3px 10px; cursor:pointer; font-family:inherit; }
     .preview-actions { display:flex; gap:.5rem; margin-top:.75rem; }
     .btn-green { height:30px; padding:0 .875rem; background:var(--booked-c); color:#fff; border:none;
       border-radius:5px; font-size:12px; font-weight:500; cursor:pointer; font-family:inherit; }
@@ -110,7 +124,7 @@
     .trip-row.s-booked { border-left-color:var(--booked-c); }
     .t-day { font-size:13px; font-weight:500; color:var(--text-3); }
     .t-date { font-size:13px; color:var(--text-3); }
-    .t-time { font-size:12px; color:var(--text-3); font-variant-numeric:tabular-nums; text-align:right; }
+    .t-time { font-size:12px; color:var(--text-3); font-variant-numeric:tabular-nums; text-align:left; }
     .t-activity { font-size:14px; display:flex; align-items:center; gap:7px; min-width:0; overflow:visible; flex-wrap:wrap; }
     .t-route-txt { white-space:nowrap; flex-shrink:0; }
     .tpill-notes { font-size:11px; background:#f3f4f6; color:var(--text-3); border:.5px solid var(--border);
@@ -281,7 +295,7 @@ function detectProvider(t){
   return null;
 }
 
-let trips=[], parsed=[], pendingTicketUrl=null;
+let trips=[], parsed=[], pendingTicketUrl=null, expandedNoteId=null;
 
 // ---- API helpers (all go through Vercel functions) ----
 async function db(action, body={}) {
@@ -329,6 +343,33 @@ async function deleteTrip(id) {
   load();
 }
 
+// ---- live note property reordering / removing ----
+function toggleNoteExpand(id){ expandedNoteId = (expandedNoteId===id) ? null : id; render(); }
+
+let noteDragSrc = null;
+function noteDragStart(id,k){ noteDragSrc={id,k}; }
+function noteDragOver(e,id,k){ e.preventDefault(); if(noteDragSrc&&noteDragSrc.id===id) document.getElementById(`nc-${id}-${k}`)?.classList.add('dragover'); }
+function noteDragLeave(id,k){ document.getElementById(`nc-${id}-${k}`)?.classList.remove('dragover'); }
+async function noteDrop(id,k){
+  if(!noteDragSrc || noteDragSrc.id!==id){ noteDragSrc=null; return; }
+  const t = trips.find(x=>x.id===id); if(!t){ noteDragSrc=null; return; }
+  const parts = (t.notes||'').split(' · ');
+  const [moved] = parts.splice(noteDragSrc.k,1);
+  parts.splice(k,0,moved);
+  noteDragSrc=null;
+  t.notes = parts.join(' · ');           // optimistic local update
+  render();
+  await db('update',{ id, payload:{ notes: t.notes } });
+}
+async function removeNotePart(id,k){
+  const t = trips.find(x=>x.id===id); if(!t) return;
+  const parts = (t.notes||'').split(' · ');
+  parts.splice(k,1);
+  t.notes = parts.join(' · ') || null;   // optimistic
+  render();
+  await db('update',{ id, payload:{ notes: t.notes } });
+}
+
 // ---- PDF / image import ----
 function setupDrop(){
   const z=document.getElementById('importZone');
@@ -370,35 +411,53 @@ async function handleFile(file){
 }
 
 function showPreview(list){
-  // Build editable model: each trip gets its notes split into removable detail chips
+  // Build editable model: each trip gets its notes split into removable+reorderable detail chips
   parsed = list.map(t => {
     const raw = (t.notes||'').split(/[·,;|]+/).map(s=>s.trim()).filter(Boolean);
     return { ...t, include:true, details: raw.map(d=>({text:d, keep:true})) };
   });
+  renderPreview();
+  document.getElementById('preview').style.display='block';
+}
 
+function renderPreview(){
   document.getElementById('previewItems').innerHTML = parsed.map((t,i)=>{
     const chips = t.details.map((d,j)=>`
-      <span class="pv-chip" id="chip-${i}-${j}">
-        ${d.text}
+      <span class="pv-chip${d.keep?'':' removed'}" draggable="true"
+        ondragstart="pvDragStart(${i},${j})" ondragover="pvDragOver(event,${i},${j})"
+        ondragleave="pvDragLeave(${i},${j})" ondrop="pvDrop(${i},${j})" id="pvchip-${i}-${j}">
+        <span class="grip">⠿</span>${d.text}
         <button onclick="toggleDetail(${i},${j})" title="Remove">×</button>
       </span>`).join('');
     return `
     <div class="pv-trip">
       <div class="pv-head">
-        <input type="checkbox" id="pi${i}" checked onchange="parsed[${i}].include=this.checked"/>
+        <input type="checkbox" id="pi${i}" ${t.include?'checked':''} onchange="parsed[${i}].include=this.checked"/>
         <span class="pv-route">${t.route||'?'}</span>
         <span class="pv-meta">${t.date||'?'}${t.time?' · '+t.time:''}${t.arrival?'→'+t.arrival:''} · ${t.transport||'Train'}</span>
       </div>
       <div class="pv-chips">${chips || '<span class="pv-meta">no extra details</span>'}</div>
     </div>`;
   }).join('');
-  document.getElementById('preview').style.display='block';
 }
 
 function toggleDetail(i,j){
-  const d = parsed[i].details[j];
-  d.keep = !d.keep;
-  document.getElementById(`chip-${i}-${j}`).classList.toggle('removed', !d.keep);
+  parsed[i].details[j].keep = !parsed[i].details[j].keep;
+  renderPreview();
+}
+
+// drag-to-reorder chips within a trip (import preview)
+let pvDragSrc = null;
+function pvDragStart(i,j){ pvDragSrc={i,j}; }
+function pvDragOver(e,i,j){ e.preventDefault(); if(pvDragSrc&&pvDragSrc.i===i) document.getElementById(`pvchip-${i}-${j}`)?.classList.add('dragover'); }
+function pvDragLeave(i,j){ document.getElementById(`pvchip-${i}-${j}`)?.classList.remove('dragover'); }
+function pvDrop(i,j){
+  if(!pvDragSrc || pvDragSrc.i!==i){ pvDragSrc=null; return; }
+  const arr = parsed[i].details;
+  const [moved] = arr.splice(pvDragSrc.j,1);
+  arr.splice(j,0,moved);
+  pvDragSrc=null;
+  renderPreview();
 }
 
 async function importSelected(){
@@ -518,15 +577,28 @@ function render(){
       const dur=duration(t);
 
       const fest = isFestival(t);
-      const heart = ''; // heart now goes on the notes pill
       const ticketLink = t.ticket_url
         ? ` <a href="${t.ticket_url}" target="_blank" class="ticket-link" title="Open ticket PDF">🎫</a>`
           + `<button class="ticket-link qr-btn" title="Show ticket large (QR)" onclick="showTicket('${t.ticket_url}')">▦</button>`
         : '';
-      const noteText = readableClass(t.notes);
-      const noteHtml = noteText
-        ? `<span class="tpill-notes${fest?' fest':''}" title="click to expand" onclick="this.classList.toggle('expanded')">${fest?'🖤 ':''}${noteText}</span>`
-        : (fest ? `<span class="tpill-notes fest">🖤 techno</span>` : '');
+
+      let noteHtml;
+      if(expandedNoteId===t.id && t.notes){
+        const parts = t.notes.split(' · ');
+        const chips = parts.map((p,k)=>`
+          <span class="note-chip" draggable="true"
+            ondragstart="noteDragStart(${t.id},${k})" ondragover="noteDragOver(event,${t.id},${k})"
+            ondragleave="noteDragLeave(${t.id},${k})" ondrop="noteDrop(${t.id},${k})" id="nc-${t.id}-${k}">
+            <span class="grip">⠿</span>${fest&&k===0?'🖤 ':''}${readableClass(p)}
+            <button onclick="removeNotePart(${t.id},${k})" title="Remove">×</button>
+          </span>`).join('');
+        noteHtml = `<span class="note-chips">${chips}<button class="note-done" onclick="toggleNoteExpand(${t.id})">done</button></span>`;
+      } else {
+        const noteText = readableClass(t.notes);
+        noteHtml = noteText
+          ? `<span class="tpill-notes${fest?' fest':''}" title="click to reorder / edit" onclick="toggleNoteExpand(${t.id})">${fest?'🖤 ':''}${noteText}</span>`
+          : (fest ? `<span class="tpill-notes fest">🖤 techno</span>` : '');
+      }
 
       // status label + urgency
       let lbl, urgent='';
@@ -548,7 +620,7 @@ function render(){
 
       html+=`<div class="trip-row s-${st} ${dayClass}">
         <span class="t-day">${showDate?day:''}</span><span class="t-date">${showDate?dateStr:''}${transferTag}</span>
-        <span class="t-time" style="display:flex;gap:3px;align-items:center;justify-content:flex-end">${timeDisplay}</span>
+        <span class="t-time" style="display:flex;gap:3px;align-items:center;justify-content:flex-start">${timeDisplay}</span>
         <span class="t-activity">
           <span class="t-route-txt">${t.route||''}${ticketLink}</span>
           ${badge}
