@@ -108,13 +108,29 @@
     .t-day { font-size:13px; font-weight:500; color:var(--text-3); }
     .t-date { font-size:13px; color:var(--text-3); }
     .t-time { font-size:12px; color:var(--text-3); font-variant-numeric:tabular-nums; text-align:right; }
-    .t-activity { font-size:14px; display:flex; align-items:center; gap:7px; min-width:0; overflow:hidden; }
+    .t-activity { font-size:14px; display:flex; align-items:center; gap:7px; min-width:0; overflow:visible; flex-wrap:wrap; }
     .t-route-txt { white-space:nowrap; flex-shrink:0; }
     .tpill-notes { font-size:11px; background:#f3f4f6; color:var(--text-3); border:.5px solid var(--border);
       border-radius:20px; padding:2px 10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
       min-width:0; max-width:100%; cursor:pointer; transition:background .12s; }
     .tpill-notes:hover { background:#e9eaec; }
-    .tpill-notes.expanded { white-space:normal; overflow:visible; max-width:none; flex-shrink:0; }
+    .trip-row:has(.tpill-notes.expanded) { align-items:start; }
+    .tpill-notes.expanded { white-space:normal; overflow:visible; max-width:none; border-radius:8px;
+      flex-basis:100%; margin-top:2px; line-height:1.5; padding:8px 12px; background:#fff;
+      border:1px solid var(--border); }
+
+    .ticket-link { text-decoration:none; font-size:13px; opacity:.7; }
+    .ticket-link:hover { opacity:1; }
+    .dur { font-size:11px; color:var(--text-4); font-variant-numeric:tabular-nums; flex-shrink:0; }
+    .transfer-tag { display:inline-block; margin-left:6px; font-size:10px; font-weight:500;
+      background:#eef2ff; color:#4338ca; border-radius:20px; padding:1px 7px; vertical-align:middle; }
+    .urgent { font-size:10px; font-weight:700; color:#fff; background:#991b1b; border-radius:4px;
+      padding:2px 6px; letter-spacing:.02em; white-space:nowrap; }
+
+    /* completed (past + booked) */
+    .trip-row.s-completed { border-left-color:var(--booked-c); opacity:.6; }
+    .trip-row.s-completed .t-route-txt { text-decoration:line-through; text-decoration-color:var(--text-4); }
+    .sb-completed { background:var(--booked-bg); color:var(--booked-c); border-color:var(--booked-bd); }
     .tbadge { font-size:11px; font-weight:500; padding:2px 8px; border-radius:20px; background:#f3f4f6;
       color:var(--text-3); border:1px solid var(--border); white-space:nowrap; flex-shrink:0; }
     .tpill { font-size:11px; background:#f3f4f6; color:var(--text-3); border:.5px solid var(--border);
@@ -383,7 +399,41 @@ function dismissPreview(){
 }
 
 // ---- render ----
+// Known festivals/parties → black heart on the destination
+const FESTIVALS = ['echelon','audio river','audioriver','nature one','timewarp','time warp','ikarus','elrow','tomorrowland','awakenings','dekmantel','909','culture box'];
+function isFestival(t){
+  const hay=((t.route||'')+' '+(t.notes||'')).toLowerCase();
+  return FESTIVALS.some(f=>hay.includes(f));
+}
+
+// Translate airline fare codes to readable class
+function readableClass(notes){
+  if(!notes) return notes;
+  return notes
+    .replace(/\bClass S\b/gi,'Business')
+    .replace(/\bBooking class S\b/gi,'Business');
+}
+
+// Duration between depart and arrive, e.g. "5h41"
+function duration(t){
+  if(!t.time||!t.arrival) return '';
+  const [h1,m1]=t.time.split(':').map(Number);
+  const [h2,m2]=t.arrival.split(':').map(Number);
+  if([h1,m1,h2,m2].some(isNaN)) return '';
+  let mins=(h2*60+m2)-(h1*60+m1);
+  if(mins<0) mins+=24*60; // crosses midnight
+  const h=Math.floor(mins/60), m=mins%60;
+  return h>0 ? `${h}h${m?String(m).padStart(2,'0'):''}` : `${m}min`;
+}
+
+function daysUntil(dateStr){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const d=new Date(dateStr+'T12:00:00'); d.setHours(0,0,0,0);
+  return Math.round((d-today)/(1000*60*60*24));
+}
+
 function render(){
+  const today=new Date(); today.setHours(0,0,0,0);
   const g={}; for(let m=5;m<=11;m++) g[m]=[];
   trips.forEach(t=>{ if(!t.date)return; const d=new Date(t.date+'T12:00:00');
     if(d.getFullYear()===2026 && d.getMonth()>=5 && d.getMonth()<=11) g[d.getMonth()].push(t); });
@@ -392,41 +442,83 @@ function render(){
   for(let m=5;m<=11;m++){
     const mt=g[m].sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
     html+=`<div class="month-block"><div class="month-header">${MONTHS[m]} 2026<span class="month-count">${mt.length}</span></div>`;
-    if(!mt.length) html+=`<div class="empty-row">No trips this month</div>`;
-    else mt.forEach(t=>{
-      const st = ['planned','book','booked'].includes(t.status) ? t.status : 'planned';
+    if(!mt.length){ html+=`<div class="empty-row">No trips this month</div>`; html+=`</div>`; continue; }
+
+    // Count legs per day for transfer indicator
+    const dayCounts={};
+    mt.forEach(t=>{ dayCounts[t.date]=(dayCounts[t.date]||0)+1; });
+
+    let lastDate=null;
+    mt.forEach(t=>{
+      const rawStatus = ['planned','book','booked'].includes(t.status) ? t.status : 'planned';
       const d=new Date(t.date+'T12:00:00');
+      const isPast = d < today;
+      const st = (isPast && rawStatus==='booked') ? 'completed' : rawStatus;
+
       const day=DAYS[d.getDay()], dateStr=MONTHS[d.getMonth()].slice(0,3)+' '+d.getDate();
+      const showDate = t.date!==lastDate;  // only show date once per day
+      lastDate=t.date;
+
+      // transfer indicator on the first row of a multi-leg day
+      let transferTag='';
+      if(showDate && dayCounts[t.date]>1){
+        const legs=mt.filter(x=>x.date===t.date);
+        const hasFlight=legs.some(x=>x.transport==='Flight');
+        const ic=hasFlight?'✈️':'🚂';
+        transferTag=`<span class="transfer-tag">${ic} ${dayCounts[t.date]} legs</span>`;
+      }
+
       const icon=ICONS[t.transport]||'🚌', time=t.time?t.time.slice(0,5):'';
       const arr=t.arrival?t.arrival.slice(0,5):'';
       const timeDisplay = time ? (arr ? `${time}<span style="color:var(--text-4)">→</span>${arr}` : time) : '—';
-      const lbl=st==='booked'?'✓ booked':st==='book'?'need to book':'planned';
+      const dur=duration(t);
+
+      const heart = isFestival(t) ? ' <span title="techno">🖤</span>' : '';
+      const ticketLink = t.ticket_url ? ` <a href="${t.ticket_url}" target="_blank" class="ticket-link" title="Open ticket">🎫</a>` : '';
+      const noteText = readableClass(t.notes);
+
+      // status label + urgency
+      let lbl, urgent='';
+      if(st==='completed') lbl='✓ completed';
+      else if(st==='booked') lbl='✓ booked';
+      else if(st==='book'){
+        lbl='need to book';
+        const dl=daysUntil(t.date);
+        if(dl>=0 && dl<=7){
+          urgent=`<span class="urgent" title="Book soon!">⚠ ${dl}d left</span>`;
+        }
+      } else lbl='planned';
+
       const prov=detectProvider(t);
+      const durBit = dur?`<span class="dur">${dur}</span>`:'';
       const badge = prov
-        ? `<span class="tbadge" style="background:${prov.bg};color:${prov.fg};border-color:${prov.bg}">${icon} ${prov.name}</span>`
-        : `<span class="tbadge">${icon} ${t.transport||'Train'}</span>`;
+        ? `<span class="tbadge" style="background:${prov.bg};color:${prov.fg};border-color:${prov.bg}">${icon} ${prov.name}</span>${durBit}`
+        : `<span class="tbadge">${icon} ${t.transport||'Train'}</span>${durBit}`;
+
       html+=`<div class="trip-row s-${st}">
-        <span class="t-day">${day}</span><span class="t-date">${dateStr}</span>
+        <span class="t-day">${showDate?day:''}</span><span class="t-date">${showDate?dateStr:''}${transferTag}</span>
         <span class="t-time" style="display:flex;gap:3px;align-items:center;justify-content:flex-end">${timeDisplay}</span>
         <span class="t-activity">
-          <span class="t-route-txt">${t.route||''}</span>
+          <span class="t-route-txt">${t.route||''}${heart}${ticketLink}</span>
           ${badge}
-          ${t.notes?`<span class="tpill-notes" title="click to expand" onclick="this.classList.toggle('expanded')">${t.notes}</span>`:''}</span>
+          ${noteText?`<span class="tpill-notes" title="click to expand" onclick="this.classList.toggle('expanded')">${noteText}</span>`:''}</span>
         <span class="t-actions">
-          <button class="sbadge sb-${st}" onclick="cycleStatus(${t.id},'${st}')">${lbl}</button>
+          ${urgent}
+          <button class="sbadge sb-${st}" onclick="cycleStatus(${t.id},'${rawStatus}')">${lbl}</button>
           <button class="del-btn" onclick="deleteTrip(${t.id})" title="Delete">×</button>
         </span></div>`;
     });
     html+=`</div>`;
   }
   document.getElementById('itinerary').innerHTML=html;
-  const booked=trips.filter(t=>t.status==='booked').length;
+
+  const booked=trips.filter(t=>t.status==='booked' && new Date(t.date+'T12:00:00')>=today).length;
+  const completed=trips.filter(t=>t.status==='booked' && new Date(t.date+'T12:00:00')<today).length;
   const toBook=trips.filter(t=>t.status==='book').length;
-  const planned=trips.filter(t=>t.status==='planned').length;
   document.getElementById('topStats').innerHTML=`
     <div class="stat-item"><div class="stat-val" style="color:var(--booked-c)">${booked}</div><div class="stat-lbl">Booked</div></div>
     <div class="stat-item"><div class="stat-val" style="color:var(--book-c)">${toBook}</div><div class="stat-lbl">To book</div></div>
-    <div class="stat-item"><div class="stat-val" style="color:var(--planned-c)">${planned}</div><div class="stat-lbl">Planned</div></div>`;
+    <div class="stat-item"><div class="stat-val" style="color:var(--text-3)">${completed}</div><div class="stat-lbl">Done</div></div>`;
 }
 
 function setStatus(type,msg){const el=document.getElementById('importStatus');el.className='import-status'+(type?' '+type:'');el.textContent=msg;}
