@@ -75,7 +75,7 @@
       padding:1.25rem 1.5rem; margin-bottom:2rem; box-shadow:0 1px 3px rgba(0,0,0,.06); }
     .add-title { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.07em;
       color:var(--text-3); margin-bottom:1rem; }
-    .form-row { display:grid; grid-template-columns:130px 95px 1fr 160px 125px 130px auto; gap:.6rem; align-items:end; }
+    .form-row { display:grid; grid-template-columns:120px 80px 80px 1fr 150px 110px 120px auto; gap:.55rem; align-items:end; }
     .field label { display:block; font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:.06em;
       color:var(--text-3); margin-bottom:.35rem; }
     input, select { width:100%; height:34px; border:1px solid var(--border); border-radius:5px; background:var(--surface);
@@ -99,7 +99,7 @@
       color:var(--text-3); padding-bottom:.5rem; border-bottom:1px solid var(--border); margin-bottom:.25rem;
       display:flex; justify-content:space-between; align-items:center; }
     .month-count { font-size:11px; font-weight:500; background:#f3f4f6; color:var(--text-3); padding:1px 7px; border-radius:20px; }
-    .trip-row { display:grid; grid-template-columns:50px 80px 56px 1fr auto; align-items:center; gap:0 12px;
+    .trip-row { display:grid; grid-template-columns:50px 80px 96px 1fr auto; align-items:center; gap:0 12px;
       padding:10px 10px 10px 14px; border-radius:5px; border-left:3px solid transparent; transition:background .1s; }
     .trip-row:hover { background:#f9fafb; }
     .trip-row.s-planned { border-left-color:var(--planned-c); }
@@ -172,7 +172,8 @@
     <div class="add-title">Add trip</div>
     <div class="form-row">
       <div class="field"><label>Date</label><input type="date" id="f-date"/></div>
-      <div class="field"><label>Time</label><input type="time" id="f-time"/></div>
+      <div class="field"><label>Depart</label><input type="time" id="f-time"/></div>
+      <div class="field"><label>Arrive</label><input type="time" id="f-arrival"/></div>
       <div class="field"><label>Route</label><input type="text" id="f-route" placeholder="Amsterdam → Berlin"/></div>
       <div class="field"><label>Notes</label><input type="text" id="f-notes" placeholder="ICE 149, seat 21..."/></div>
       <div class="field"><label>Transport</label><select id="f-transport">
@@ -261,12 +262,13 @@ async function addTrip() {
   if(!date){ showToast('Pick a date first'); return; }
   if(!route){ showToast('Enter a route'); return; }
   await db('insert', { payload:{
-    date, time:document.getElementById('f-time').value||null, route,
+    date, time:document.getElementById('f-time').value||null,
+    arrival:document.getElementById('f-arrival').value||null, route,
     notes:document.getElementById('f-notes').value.trim()||null,
     transport:document.getElementById('f-transport').value,
     status:document.getElementById('f-status').value
   }});
-  ['f-date','f-time','f-route','f-notes'].forEach(id=>document.getElementById(id).value='');
+  ['f-date','f-time','f-arrival','f-route','f-notes'].forEach(id=>document.getElementById(id).value='');
   showToast('Trip added ✓'); load();
 }
 
@@ -329,7 +331,7 @@ function showPreview(list){
       <div class="pv-head">
         <input type="checkbox" id="pi${i}" checked onchange="parsed[${i}].include=this.checked"/>
         <span class="pv-route">${t.route||'?'}</span>
-        <span class="pv-meta">${t.date||'?'}${t.time?' · '+t.time:''} · ${t.transport||'Train'}</span>
+        <span class="pv-meta">${t.date||'?'}${t.time?' · '+t.time:''}${t.arrival?'→'+t.arrival:''} · ${t.transport||'Train'}</span>
       </div>
       <div class="pv-chips">${chips || '<span class="pv-meta">no extra details</span>'}</div>
     </div>`;
@@ -345,7 +347,7 @@ function toggleDetail(i,j){
 
 async function importSelected(){
   const chosen = parsed.filter(t=>t.include).map(t=>({
-    date:t.date, time:t.time||null, route:t.route,
+    date:t.date, time:t.time||null, arrival:t.arrival||null, route:t.route,
     notes: t.details.filter(d=>d.keep).map(d=>d.text).join(' · ') || null,
     transport:t.transport||'Train', status:t.status||'booked'
   }));
@@ -386,22 +388,25 @@ function render(){
     html+=`<div class="month-block"><div class="month-header">${MONTHS[m]} 2026<span class="month-count">${mt.length}</span></div>`;
     if(!mt.length) html+=`<div class="empty-row">No trips this month</div>`;
     else mt.forEach(t=>{
+      const st = ['planned','book','booked'].includes(t.status) ? t.status : 'planned';
       const d=new Date(t.date+'T12:00:00');
       const day=DAYS[d.getDay()], dateStr=MONTHS[d.getMonth()].slice(0,3)+' '+d.getDate();
       const icon=ICONS[t.transport]||'🚌', time=t.time?t.time.slice(0,5):'';
-      const lbl=t.status==='booked'?'✓ booked':t.status==='book'?'need to book':'planned';
+      const arr=t.arrival?t.arrival.slice(0,5):'';
+      const timeDisplay = time ? (arr ? `${time}<span style="color:var(--text-4)">→</span>${arr}` : time) : '—';
+      const lbl=st==='booked'?'✓ booked':st==='book'?'need to book':'planned';
       const prov=detectProvider(t);
       const badge = prov
         ? `<span class="tbadge" style="background:${prov.bg};color:${prov.fg};border-color:${prov.bg}">${icon} ${prov.name}</span>`
         : `<span class="tbadge">${icon} ${t.transport||'Train'}</span>`;
-      html+=`<div class="trip-row s-${t.status}">
+      html+=`<div class="trip-row s-${st}">
         <span class="t-day">${day}</span><span class="t-date">${dateStr}</span>
-        <span class="t-time">${time||'—'}</span>
+        <span class="t-time" style="display:flex;gap:3px;align-items:center;justify-content:flex-end">${timeDisplay}</span>
         <span class="t-activity">${t.route||''}
           ${badge}
           ${t.notes?`<span class="tpill">${t.notes}</span>`:''}</span>
         <span class="t-actions">
-          <button class="sbadge sb-${t.status}" onclick="cycleStatus(${t.id},'${t.status}')">${lbl}</button>
+          <button class="sbadge sb-${st}" onclick="cycleStatus(${t.id},'${st}')">${lbl}</button>
           <button class="del-btn" onclick="deleteTrip(${t.id})" title="Delete">×</button>
         </span></div>`;
     });
