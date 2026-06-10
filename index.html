@@ -108,9 +108,13 @@
     .t-day { font-size:13px; font-weight:500; color:var(--text-3); }
     .t-date { font-size:13px; color:var(--text-3); }
     .t-time { font-size:12px; color:var(--text-3); font-variant-numeric:tabular-nums; text-align:right; }
-    .t-activity { font-size:14px; display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+    .t-activity { font-size:14px; display:flex; align-items:center; gap:7px; min-width:0; overflow:hidden; }
+    .t-route-txt { white-space:nowrap; flex-shrink:0; }
+    .tpill-notes { font-size:11px; background:#f3f4f6; color:var(--text-3); border:.5px solid var(--border);
+      border-radius:20px; padding:2px 10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      min-width:0; max-width:100%; }
     .tbadge { font-size:11px; font-weight:500; padding:2px 8px; border-radius:20px; background:#f3f4f6;
-      color:var(--text-3); border:1px solid var(--border); }
+      color:var(--text-3); border:1px solid var(--border); white-space:nowrap; flex-shrink:0; }
     .tpill { font-size:11px; background:#f3f4f6; color:var(--text-3); border:.5px solid var(--border);
       border-radius:20px; padding:2px 10px; white-space:nowrap; }
     .sbadge { font-size:11px; font-weight:600; padding:2px 10px; border-radius:20px; border:1px solid transparent;
@@ -402,9 +406,10 @@ function render(){
       html+=`<div class="trip-row s-${st}">
         <span class="t-day">${day}</span><span class="t-date">${dateStr}</span>
         <span class="t-time" style="display:flex;gap:3px;align-items:center;justify-content:flex-end">${timeDisplay}</span>
-        <span class="t-activity">${t.route||''}
+        <span class="t-activity">
+          <span class="t-route-txt">${t.route||''}</span>
           ${badge}
-          ${t.notes?`<span class="tpill">${t.notes}</span>`:''}</span>
+          ${t.notes?`<span class="tpill-notes" title="${(t.notes||'').replace(/"/g,'&quot;')}">${t.notes}</span>`:''}</span>
         <span class="t-actions">
           <button class="sbadge sb-${st}" onclick="cycleStatus(${t.id},'${st}')">${lbl}</button>
           <button class="del-btn" onclick="deleteTrip(${t.id})" title="Delete">×</button>
