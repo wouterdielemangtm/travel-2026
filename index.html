@@ -230,7 +230,7 @@
       <div class="field"><label>Notes</label><input type="text" id="f-notes" placeholder="ICE 149, seat 21..."/></div>
       <div class="field"><label>Transport</label><select id="f-transport">
         <option value="Train">🚂 Train</option><option value="Flight">✈️ Flight</option>
-        <option value="Uber">🚗 Uber</option><option value="Walk">🚶 Walk</option><option value="Ferry">⛴️ Ferry</option>
+        <option value="Uber">🚗 Uber</option><option value="Walk">🚶 Walk</option><option value="Ferry">⛴️ Ferry</option><option value="Stay">🏠 Stay</option>
       </select></div>
       <div class="field"><label>Status</label><select id="f-status">
         <option value="planned">Planned</option><option value="book">Need to book</option><option value="booked">Booked ✓</option>
@@ -261,7 +261,7 @@
 <script>
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-const ICONS={Train:'🚂',Flight:'✈️',Uber:'🚗',Walk:'🚶',Ferry:'⛴️'};
+const ICONS={Train:'🚂',Flight:'✈️',Uber:'🚗',Walk:'🚶',Ferry:'⛴️',Stay:'🏠'};
 
 // Provider brand detection. Names match in route+notes; short codes only in notes, word-bounded.
 const PROVIDERS=[
@@ -275,6 +275,8 @@ const PROVIDERS=[
   {name:'Lufthansa',     bg:'#05164D', fg:'#F9BA00', names:['lufthansa'], codes:['lh']},
   {name:'Austrian',      bg:'#CC0000', fg:'#fff', names:['austrian'], codes:['os','aua']},
   {name:'Transavia',     bg:'#00D1B0', fg:'#fff', names:['transavia'], codes:['hv']},
+  {name:'Airbnb',        bg:'#FF5A5F', fg:'#fff', names:['airbnb'], codes:[]},
+  {name:'Booking.com',   bg:'#003580', fg:'#fff', names:['booking.com','booking '], codes:[]},
   {name:'KLM',           bg:'#00A1DE', fg:'#fff', names:[], codes:['klm']},
 ];
 
@@ -434,7 +436,7 @@ function renderPreview(){
       <div class="pv-head">
         <input type="checkbox" id="pi${i}" ${t.include?'checked':''} onchange="parsed[${i}].include=this.checked"/>
         <span class="pv-route">${t.route||'?'}</span>
-        <span class="pv-meta">${t.date||'?'}${t.time?' · '+t.time:''}${t.arrival?'→'+t.arrival:''} · ${t.transport||'Train'}</span>
+        <span class="pv-meta">${t.date||'?'}${t.time?' · '+t.time:''}${t.arrival?'→'+t.arrival:''}${t.checkout?' → '+t.checkout:''}${t.checkout_time?' '+t.checkout_time:''} · ${t.transport||'Train'}</span>
       </div>
       <div class="pv-chips">${chips || '<span class="pv-meta">no extra details</span>'}</div>
     </div>`;
@@ -462,7 +464,8 @@ function pvDrop(i,j){
 
 async function importSelected(){
   const chosen = parsed.filter(t=>t.include).map(t=>({
-    date:t.date, time:t.time||null, arrival:t.arrival||null, route:t.route,
+    date:t.date, time:t.time||null, arrival:t.arrival||null,
+    checkout:t.checkout||null, checkout_time:t.checkout_time||null, route:t.route,
     notes: t.details.filter(d=>d.keep).map(d=>d.text).join(' · ') || null,
     transport:t.transport||'Train', status:t.status||'booked',
     ticket_url: pendingTicketUrl || null
@@ -520,6 +523,13 @@ function duration(t){
   return h>0 ? `${h}h${m?String(m).padStart(2,'0'):''}` : `${m}min`;
 }
 
+function nightsBetween(checkin, checkout){
+  if(!checkin || !checkout) return 0;
+  const a=new Date(checkin+'T12:00:00'), b=new Date(checkout+'T12:00:00');
+  if(isNaN(a)||isNaN(b)) return 0;
+  return Math.round((b-a)/(1000*60*60*24));
+}
+
 function daysUntil(dateStr){
   const today=new Date(); today.setHours(0,0,0,0);
   const d=new Date(dateStr+'T12:00:00'); d.setHours(0,0,0,0);
@@ -571,10 +581,20 @@ function render(){
         transferTag=`<span class="transfer-tag">${ic} ${dayCounts[t.date]} legs</span>`;
       }
 
+      const isStay = t.transport==='Stay';
       const icon=ICONS[t.transport]||'🚌', time=t.time?t.time.slice(0,5):'';
       const arr=t.arrival?t.arrival.slice(0,5):'';
-      const timeDisplay = time ? (arr ? `${time}<span style="color:var(--text-4)">→</span>${arr}` : time) : '—';
-      const dur=duration(t);
+      const coTime = t.checkout_time?t.checkout_time.slice(0,5):'';
+      let timeDisplay, dur;
+      if(isStay){
+        // show check-in time → check-out time; duration = nights
+        timeDisplay = time ? (coTime ? `${time}<span style="color:var(--text-4)">→</span>${coTime}` : time) : '—';
+        const n = nightsBetween(t.date, t.checkout);
+        dur = n>0 ? `${n} ${n===1?'night':'nights'}` : '';
+      } else {
+        timeDisplay = time ? (arr ? `${time}<span style="color:var(--text-4)">→</span>${arr}` : time) : '—';
+        dur = duration(t);
+      }
 
       const fest = isFestival(t);
       const ticketLink = t.ticket_url
