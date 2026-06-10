@@ -101,6 +101,7 @@
     .month-count { font-size:11px; font-weight:500; background:#f3f4f6; color:var(--text-3); padding:1px 7px; border-radius:20px; }
     .trip-row { display:grid; grid-template-columns:50px 80px 96px 1fr auto; align-items:center; gap:0 12px;
       padding:10px 10px 10px 14px; border-radius:5px; border-left:3px solid transparent; transition:background .1s; }
+    .trip-row.cont { border-radius:0; margin-top:-4px; padding-top:6px; }
     .trip-row:hover { background:#f9fafb; }
     .trip-row.s-planned { border-left-color:var(--planned-c); }
     .trip-row.s-book { border-left-color:var(--book-c); }
@@ -122,8 +123,10 @@
     .ticket-link { text-decoration:none; font-size:13px; opacity:.7; }
     .ticket-link:hover { opacity:1; }
     .dur { font-size:11px; color:var(--text-4); font-variant-numeric:tabular-nums; flex-shrink:0; }
-    .transfer-tag { display:inline-block; margin-left:6px; font-size:10px; font-weight:500;
-      background:#eef2ff; color:#4338ca; border-radius:20px; padding:1px 7px; vertical-align:middle; }
+    .tpill-notes.fest { background:#1a1a1a; color:#fff; border-color:#1a1a1a; }
+    .tpill-notes.fest:hover { background:#000; }
+    .transfer-tag { display:block; margin-top:2px; font-size:9px; font-weight:600;
+      color:#4338ca; letter-spacing:.02em; white-space:nowrap; }
     .urgent { font-size:10px; font-weight:700; color:#fff; background:#991b1b; border-radius:4px;
       padding:2px 6px; letter-spacing:.02em; white-space:nowrap; }
 
@@ -473,9 +476,13 @@ function render(){
       const timeDisplay = time ? (arr ? `${time}<span style="color:var(--text-4)">→</span>${arr}` : time) : '—';
       const dur=duration(t);
 
-      const heart = isFestival(t) ? ' <span title="techno">🖤</span>' : '';
+      const fest = isFestival(t);
+      const heart = ''; // heart now goes on the notes pill
       const ticketLink = t.ticket_url ? ` <a href="${t.ticket_url}" target="_blank" class="ticket-link" title="Open ticket">🎫</a>` : '';
       const noteText = readableClass(t.notes);
+      const noteHtml = noteText
+        ? `<span class="tpill-notes${fest?' fest':''}" title="click to expand" onclick="this.classList.toggle('expanded')">${fest?'🖤 ':''}${noteText}</span>`
+        : (fest ? `<span class="tpill-notes fest">🖤 techno</span>` : '');
 
       // status label + urgency
       let lbl, urgent='';
@@ -495,13 +502,13 @@ function render(){
         ? `<span class="tbadge" style="background:${prov.bg};color:${prov.fg};border-color:${prov.bg}">${icon} ${prov.name}</span>${durBit}`
         : `<span class="tbadge">${icon} ${t.transport||'Train'}</span>${durBit}`;
 
-      html+=`<div class="trip-row s-${st}">
+      html+=`<div class="trip-row s-${st}${showDate?'':' cont'}">
         <span class="t-day">${showDate?day:''}</span><span class="t-date">${showDate?dateStr:''}${transferTag}</span>
         <span class="t-time" style="display:flex;gap:3px;align-items:center;justify-content:flex-end">${timeDisplay}</span>
         <span class="t-activity">
-          <span class="t-route-txt">${t.route||''}${heart}${ticketLink}</span>
+          <span class="t-route-txt">${t.route||''}${ticketLink}</span>
           ${badge}
-          ${noteText?`<span class="tpill-notes" title="click to expand" onclick="this.classList.toggle('expanded')">${noteText}</span>`:''}</span>
+          ${noteHtml}</span>
         <span class="t-actions">
           ${urgent}
           <button class="sbadge sb-${st}" onclick="cycleStatus(${t.id},'${rawStatus}')">${lbl}</button>
